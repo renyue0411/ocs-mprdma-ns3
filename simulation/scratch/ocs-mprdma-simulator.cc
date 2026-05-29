@@ -1403,6 +1403,7 @@ void LoadOcsInitialMapping(NodeContainer &n)
                   << std::endl;
 
         ocsMappings[ocsId].push_back(std::make_pair(actualInIf, actualOutIf));
+		ocsMappings[ocsId].push_back(std::make_pair(actualOutIf, actualInIf));
     }
 
     for (std::map<uint32_t, std::vector<std::pair<uint32_t, uint32_t> > >::iterator it = ocsMappings.begin();

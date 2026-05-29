@@ -1,4 +1,4 @@
 2 0 1
-# 2 1 0
+5 0 1
 
-# ocs_id port_in port_out
+# ocs_id port_a port_b
