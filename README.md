@@ -1,4 +1,4 @@
-# NS3-MP-RDMA simulation
+# NS3-OCS-MPRDMA simulation
 
 This is a MP-RDMA NS-3 simulator based on the [HPCC: https://hpcc-group.github.io/](https://hpcc-group.github.io/) implementation for simulating the performance of MP-RDMA(Multi-Path RDMA) in OCS architecture.
 

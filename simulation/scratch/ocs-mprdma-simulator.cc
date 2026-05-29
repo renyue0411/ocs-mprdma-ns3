@@ -19,6 +19,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <unordered_map>
 #include <time.h>
 #include "ns3/core-module.h"
@@ -36,6 +37,10 @@
 #include <ns3/mp-rdma-driver.h>
 #include <ns3/mp-switch-node.h>
 #include <ns3/sim-setting.h>
+
+// OCS node
+#include "ns3/ocs-node.h"
+#include <set>
 
 using namespace ns3;
 using namespace std;
@@ -55,6 +60,10 @@ double rate_decrease_interval = 4;
 uint32_t fast_recovery_times = 5;
 std::string rate_ai, rate_hai, min_rate = "100Mb/s";
 std::string dctcp_rate_ai = "1000Mb/s";
+
+// OCS node
+std::set<uint32_t> ocs_node_ids;
+std::string ocs_map_file = "";
 
 bool clamp_target_rate = false, l2_back_to_zero = false;
 double error_rate_per_link = 0.0;
@@ -119,6 +128,10 @@ std::vector<Ipv4Address> serverAddress;
 // maintain port number for each host pair
 std::unordered_map<uint32_t, unordered_map<uint32_t, uint16_t>> portNumder;
 
+// ocs link
+std::map<uint32_t, std::map<uint32_t, uint32_t> > logicalPortToIf;
+std::map<uint32_t, std::map<uint32_t, uint32_t> > ifToLogicalPort;
+
 struct FlowInput
 {
 	uint32_t src, dst, pg, maxPacketCount, port, dport;
@@ -128,12 +141,19 @@ struct FlowInput
 FlowInput flow_input = {0};
 uint32_t flow_num;
 
+void LoadOcsInitialMapping(NodeContainer &n);
+
 void ReadFlowInput()
 {
 	if (flow_input.idx < flow_num)
 	{
-		flowf >> flow_input.src >> flow_input.dst >> flow_input.pg >> flow_input.dport >> flow_input.maxPacketCount >> flow_input.start_time;
-		NS_ASSERT(n.Get(flow_input.src)->GetNodeType() == 0 && n.Get(flow_input.dst)->GetNodeType() == 0);
+		flowf >> flow_input.src >> flow_input.dst >> flow_input.pg
+		      >> flow_input.dport >> flow_input.maxPacketCount
+		      >> flow_input.start_time;
+		NS_ASSERT_MSG(flow_input.src < n.GetN(), "flow src node id out of range");
+		NS_ASSERT_MSG(flow_input.dst < n.GetN(), "flow dst node id out of range");
+		NS_ASSERT_MSG(n.Get(flow_input.src)->GetNodeType() == 0, "flow src is not host");
+		NS_ASSERT_MSG(n.Get(flow_input.dst)->GetNodeType() == 0, "flow dst is not host");
 	}
 }
 void ScheduleFlowInputs()
@@ -175,7 +195,6 @@ uint32_t ip_to_node_id(Ipv4Address ip)
 
 void qp_finish(FILE *fout, Ptr<MpRdmaQueuePair> q)
 {
-	printf("writing fct.txt.\n");
 	uint32_t sid = ip_to_node_id(q->sip), did = ip_to_node_id(q->dip);
 	uint64_t base_rtt = pairRtt[sid][did], b = pairBw[sid][did];
 	uint32_t total_bytes = q->m_size + ((q->m_size - 1) / packet_payload_size + 1) * (CustomHeader::GetStaticWholeHeaderSize() - IntHeader::GetStaticSize()); // translate to the minimum bytes required (with header but no INT)
@@ -278,7 +297,7 @@ void CalculateRoute(Ptr<Node> host)
 				txDelay[next] = txDelay[now] + packet_payload_size * 1000000000lu * 8 / it->second.bw;
 				bw[next] = std::min(bw[now], it->second.bw);
 				// we only enqueue switch, because we do not want packets to go through host as middle point
-				if (next->GetNodeType() == 1)
+				if (next->GetNodeType() > 0)
 					q.push_back(next);
 			}
 			// if 'now' is on the shortest path from 'next' to 'host'.
@@ -325,11 +344,15 @@ void SetRoutingEntries()
 			{
 				Ptr<Node> next = nexts[k];
 				uint32_t interface = nbr2if[node][next].idx;
-				if (node->GetNodeType() == 1)
-					DynamicCast<MpSwitchNode>(node)->AddTableEntry(dstAddr, interface);
-				else
-				{
+				if (node->GetNodeType() == 0) {
 					node->GetObject<MpRdmaDriver>()->m_rdma->AddTableEntry(dstAddr, interface);
+				}
+				else if (node->GetNodeType() == 1) {
+					DynamicCast<MpSwitchNode>(node)->AddTableEntry(dstAddr, interface);
+				}
+				else if (node->GetNodeType() == 2) {
+					// OCS 不使用 IP routing table。
+					// 它只根据当前 port-to-port circuit mapping 转发。
 				}
 			}
 		}
@@ -348,10 +371,15 @@ void TakeDownLink(NodeContainer n, Ptr<Node> a, Ptr<Node> b)
 	// clear routing tables
 	for (uint32_t i = 0; i < n.GetN(); i++)
 	{
-		if (n.Get(i)->GetNodeType() == 1)
+		if (n.Get(i)->GetNodeType() == 1) {
 			DynamicCast<MpSwitchNode>(n.Get(i))->ClearTable();
-		else
+		}
+		else if (n.Get(i)->GetNodeType() == 0) {
 			n.Get(i)->GetObject<MpRdmaDriver>()->m_rdma->ClearTable();
+		}
+		else if (n.Get(i)->GetNodeType() == 2) {
+			// OCS has no routing table.
+		}
 	}
 	DynamicCast<MpQbbNetDevice>(a->GetDevice(nbr2if[a][b].idx))->TakeDown();
 	DynamicCast<MpQbbNetDevice>(b->GetDevice(nbr2if[b][a].idx))->TakeDown();
@@ -766,6 +794,11 @@ int main(int argc, char *argv[])
 				conf >> pint_prob;
 				std::cout << "PINT_PROB\t\t\t\t" << pint_prob << '\n';
 			}
+			// OCS node
+			else if (key.compare("OCS_MAP_FILE") == 0) {
+				conf >> ocs_map_file;
+				std::cout << "OCS_MAP_FILE\t\t\t" << ocs_map_file << "\n";
+			}
 			fflush(stdout);
 		}
 		conf.close();
@@ -811,7 +844,57 @@ int main(int argc, char *argv[])
 	flowf.open(flow_file.c_str());
 	tracef.open(trace_file.c_str());
 	uint32_t node_num, switch_num, link_num, trace_num;
-	topof >> node_num >> switch_num >> link_num;
+	uint32_t ocs_num = 0;
+	bool topology_has_logical_ports = false;
+
+	std::string firstLine;
+	std::getline(topof, firstLine);
+
+	// Skip empty lines if needed.
+	while (firstLine.size() == 0) {
+		std::getline(topof, firstLine);
+	}
+
+	std::stringstream ss(firstLine);
+	std::vector<uint32_t> headerFields;
+	uint32_t tmp;
+
+	while (ss >> tmp) {
+		headerFields.push_back(tmp);
+	}
+
+	if (headerFields.size() == 3) {
+		// Legacy format:
+		// node_num switch_num link_num
+		// link line: src dst rate delay error
+		node_num = headerFields[0];
+		switch_num = headerFields[1];
+		link_num = headerFields[2];
+		ocs_num = 0;
+		topology_has_logical_ports = false;
+
+		std::cout << "TOPOLOGY_FORMAT\t\t\tlegacy\n";
+	}
+	else if (headerFields.size() == 4) {
+		// OCS-aware format:
+		// node_num switch_num ocs_num link_num
+		// link line: src dst src_port dst_port rate delay error
+		node_num = headerFields[0];
+		switch_num = headerFields[1];
+		ocs_num = headerFields[2];
+		link_num = headerFields[3];
+		topology_has_logical_ports = true;
+
+		std::cout << "TOPOLOGY_FORMAT\t\t\twith_ocs_ports\n";
+	}
+	else {
+		NS_ASSERT_MSG(false, "Invalid topology header format");
+	}
+
+	std::cout << "TOPOLOGY_NODES\t\t\t" << node_num << "\n";
+	std::cout << "TOPOLOGY_SWITCHES\t\t" << switch_num << "\n";
+	std::cout << "TOPOLOGY_OCS\t\t\t" << ocs_num << "\n";
+	std::cout << "TOPOLOGY_LINKS\t\t\t" << link_num << "\n";
 	flowf >> flow_num;
 	tracef >> trace_num;
 
@@ -820,21 +903,42 @@ int main(int argc, char *argv[])
 	// set switch and server
 	//
 	std::vector<uint32_t> node_type(node_num, 0);
-	for (uint32_t i = 0; i < switch_num; i++)
-	{
+	for (uint32_t i = 0; i < switch_num; i++) {
 		uint32_t sid;
 		topof >> sid;
+
+		NS_ASSERT_MSG(sid < node_num, "switch id out of range");
+
 		node_type[sid] = 1;
+		std::cout << "[TOPOLOGY SWITCH] node=" << sid << std::endl;
 	}
-	for (uint32_t i = 0; i < node_num; i++)
-	{
-		if (node_type[i] == 0)
-			n.Add(CreateObject<Node>());
-		else
-		{
+
+	for (uint32_t i = 0; i < ocs_num; i++) {
+		uint32_t oid;
+		topof >> oid;
+
+		NS_ASSERT_MSG(oid < node_num, "OCS id out of range");
+		NS_ASSERT_MSG(node_type[oid] == 0, "OCS node conflicts with switch node");
+
+		node_type[oid] = 2;
+		ocs_node_ids.insert(oid);
+
+		std::cout << "[TOPOLOGY OCS] node=" << oid << std::endl;
+	}
+	for (uint32_t i = 0; i < node_num; i++) {
+		if (node_type[i] == 2) {
+			Ptr<OcsNode> ocs = CreateObject<OcsNode>();
+			n.Add(ocs);
+			std::cout << "Create OCS node: " << i << std::endl;
+		}
+		else if (node_type[i] == 1) {
 			Ptr<MpSwitchNode> sw = CreateObject<MpSwitchNode>();
 			n.Add(sw);
 			sw->SetAttribute("EcnEnabled", BooleanValue(enable_qcn));
+			std::cout << "Create switch node: " << i << std::endl;
+		}
+		else {
+			n.Add(CreateObject<Node>());
 		}
 	}
 
@@ -878,9 +982,23 @@ int main(int argc, char *argv[])
 	for (uint32_t i = 0; i < link_num; i++)
 	{
 		uint32_t src, dst;
+		uint32_t srcPort = 0, dstPort = 0;
 		std::string data_rate, link_delay;
 		double error_rate;
-		topof >> src >> dst >> data_rate >> link_delay >> error_rate;
+
+		if (topology_has_logical_ports) {
+			// OCS-aware format:
+			// src dst src_port dst_port rate delay error
+			topof >> src >> dst >> srcPort >> dstPort >> data_rate >> link_delay >> error_rate;
+		}
+		else {
+			// Legacy format:
+			// src dst rate delay error
+			topof >> src >> dst >> data_rate >> link_delay >> error_rate;
+		}
+
+		NS_ASSERT_MSG(src < node_num, "link src node id out of range");
+		NS_ASSERT_MSG(dst < node_num, "link dst node id out of range");
 
 		Ptr<Node> snode = n.Get(src), dnode = n.Get(dst);
 
@@ -909,6 +1027,47 @@ int main(int argc, char *argv[])
 		// because we want our IP to be the primary IP (first in the IP address list),
 		// so that the global routing is based on our IP
 		NetDeviceContainer d = mpQbb.Install(snode, dnode);
+
+		Ptr<MpQbbNetDevice> srcDev = DynamicCast<MpQbbNetDevice>(d.Get(0));
+		Ptr<MpQbbNetDevice> dstDev = DynamicCast<MpQbbNetDevice>(d.Get(1));
+		NS_ASSERT_MSG(srcDev != 0, "source device is not MpQbbNetDevice");
+		NS_ASSERT_MSG(dstDev != 0, "destination device is not MpQbbNetDevice");
+
+		uint32_t srcIf = srcDev->GetIfIndex();
+		uint32_t dstIf = dstDev->GetIfIndex();
+
+		if (topology_has_logical_ports) {
+			NS_ASSERT_MSG(
+				logicalPortToIf[src].find(srcPort) == logicalPortToIf[src].end(),
+				"Duplicate logical port on src node"
+			);
+
+			NS_ASSERT_MSG(
+				logicalPortToIf[dst].find(dstPort) == logicalPortToIf[dst].end(),
+				"Duplicate logical port on dst node"
+			);
+
+			logicalPortToIf[src][srcPort] = srcIf;
+			logicalPortToIf[dst][dstPort] = dstIf;
+
+			ifToLogicalPort[src][srcIf] = srcPort;
+			ifToLogicalPort[dst][dstIf] = dstPort;
+
+			std::cout << "[PORT MAP] node " << src
+					  << " logical " << srcPort
+					  << " -> if " << srcIf
+					  << " connected to node " << dst
+					  << " logical " << dstPort
+					  << std::endl;
+
+			std::cout << "[PORT MAP] node " << dst
+					  << " logical " << dstPort
+					  << " -> if " << dstIf
+					  << " connected to node " << src
+					  << " logical " << srcPort
+					  << std::endl;
+		}
+
 		if (snode->GetNodeType() == 0)
 		{
 			Ptr<Ipv4> ipv4 = snode->GetObject<Ipv4>();
@@ -923,14 +1082,14 @@ int main(int argc, char *argv[])
 		}
 
 		// used to create a graph of the topology
-		nbr2if[snode][dnode].idx = DynamicCast<MpQbbNetDevice>(d.Get(0))->GetIfIndex();
+		nbr2if[snode][dnode].idx = srcIf;
 		nbr2if[snode][dnode].up = true;
-		nbr2if[snode][dnode].delay = DynamicCast<MpQbbChannel>(DynamicCast<MpQbbNetDevice>(d.Get(0))->GetChannel())->GetDelay().GetTimeStep();
-		nbr2if[snode][dnode].bw = DynamicCast<MpQbbNetDevice>(d.Get(0))->GetDataRate().GetBitRate();
-		nbr2if[dnode][snode].idx = DynamicCast<MpQbbNetDevice>(d.Get(1))->GetIfIndex();
+		nbr2if[snode][dnode].delay = DynamicCast<MpQbbChannel>(srcDev->GetChannel())->GetDelay().GetTimeStep();
+		nbr2if[snode][dnode].bw = srcDev->GetDataRate().GetBitRate();
+		nbr2if[dnode][snode].idx = dstIf;
 		nbr2if[dnode][snode].up = true;
-		nbr2if[dnode][snode].delay = DynamicCast<MpQbbChannel>(DynamicCast<MpQbbNetDevice>(d.Get(1))->GetChannel())->GetDelay().GetTimeStep();
-		nbr2if[dnode][snode].bw = DynamicCast<MpQbbNetDevice>(d.Get(1))->GetDataRate().GetBitRate();
+		nbr2if[dnode][snode].delay = DynamicCast<MpQbbChannel>(dstDev->GetChannel())->GetDelay().GetTimeStep();
+		nbr2if[dnode][snode].bw = dstDev->GetDataRate().GetBitRate();
 
 		// This is just to set up the connectivity between nodes. The IP addresses are useless
 		char ipstring[16];
@@ -939,9 +1098,11 @@ int main(int argc, char *argv[])
 		ipv4.Assign(d);
 
 		// setup PFC trace
-		DynamicCast<MpQbbNetDevice>(d.Get(0))->TraceConnectWithoutContext("QbbPfc", MakeBoundCallback(&get_pfc, pfc_file, DynamicCast<MpQbbNetDevice>(d.Get(0))));
-		DynamicCast<MpQbbNetDevice>(d.Get(1))->TraceConnectWithoutContext("QbbPfc", MakeBoundCallback(&get_pfc, pfc_file, DynamicCast<MpQbbNetDevice>(d.Get(1))));
+		srcDev->TraceConnectWithoutContext("QbbPfc", MakeBoundCallback(&get_pfc, pfc_file, srcDev));
+		dstDev->TraceConnectWithoutContext("QbbPfc", MakeBoundCallback(&get_pfc, pfc_file, dstDev));
 	}
+
+	LoadOcsInitialMapping(n);
 
 	nic_rate = get_nic_rate(n);
 
@@ -1063,7 +1224,9 @@ int main(int argc, char *argv[])
 		}
 	}
 	printf("maxRtt=%lu maxBdp=%lu\n", maxRtt, maxBdp);
-
+	
+	fflush(stdout);
+	
 	//
 	// setup switch CC
 	//
@@ -1080,7 +1243,7 @@ int main(int argc, char *argv[])
 	//
 	// add trace
 	//
-
+	//  trace setup" << std::endl;
 	NodeContainer trace_nodes;
 	for (uint32_t i = 0; i < trace_num; i++)
 	{
@@ -1094,12 +1257,15 @@ int main(int argc, char *argv[])
 	}
 
 	FILE *trace_output = fopen(trace_output_file.c_str(), "w");
-	if (enable_trace)
-		mpQbb.EnableTracing(trace_output, trace_nodes);
-
+	if (enable_trace) {
+		mpQbb.EnableTracing(trace_output, trace_nodes);	
+	}
 	// dump link speed to trace file
 	{
+		//  dump link speed" << std::endl;
+
 		SimSetting sim_setting;
+
 		for (auto i : nbr2if)
 		{
 			for (auto j : i.second)
@@ -1114,7 +1280,7 @@ int main(int argc, char *argv[])
 		sim_setting.Serialize(trace_output);
 	}
 
-	Ipv4GlobalRoutingHelper::PopulateRoutingTables();
+	// Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 
 	NS_LOG_INFO("Create Applications.");
 
@@ -1165,4 +1331,96 @@ int main(int argc, char *argv[])
 
 	endt = clock();
 	std::cout << (double)(endt - begint) / CLOCKS_PER_SEC << "\n";
+}
+
+void LoadOcsInitialMapping(NodeContainer &n)
+{
+    if (ocs_map_file.empty()) {
+        return;
+    }
+
+    std::ifstream fin(ocs_map_file.c_str());
+    if (!fin.is_open()) {
+        std::cout << "Cannot open OCS_MAP_FILE: " << ocs_map_file << std::endl;
+        return;
+    }
+
+    std::map<uint32_t, std::vector<std::pair<uint32_t, uint32_t> > > ocsMappings;
+
+    std::string line;
+    uint32_t lineNo = 0;
+
+    while (std::getline(fin, line)) {
+        lineNo++;
+
+        // Remove inline comments.
+        size_t commentPos = line.find('#');
+        if (commentPos != std::string::npos) {
+            line = line.substr(0, commentPos);
+        }
+
+        // Parse remaining content.
+        std::stringstream ss(line);
+
+        uint32_t ocsId, logicalInPort, logicalOutPort;
+
+        // Empty line or comment-only line.
+        if (!(ss >> ocsId >> logicalInPort >> logicalOutPort)) {
+            continue;
+        }
+
+        // Detect extra non-comment fields.
+        std::string extra;
+        if (ss >> extra) {
+            std::cout << "[WARN] Extra field in OCS_MAP_FILE at line "
+                      << lineNo << ": " << extra << std::endl;
+        }
+
+        NS_ASSERT_MSG(ocsId < n.GetN(), "OCS map points to invalid node id");
+
+        Ptr<OcsNode> ocs = DynamicCast<OcsNode>(n.Get(ocsId));
+        NS_ASSERT_MSG(ocs != 0, "OCS_MAP_FILE points to a non-OCS node");
+
+        NS_ASSERT_MSG(
+            logicalPortToIf[ocsId].find(logicalInPort) != logicalPortToIf[ocsId].end(),
+            "OCS logical input port not found"
+        );
+
+        NS_ASSERT_MSG(
+            logicalPortToIf[ocsId].find(logicalOutPort) != logicalPortToIf[ocsId].end(),
+            "OCS logical output port not found"
+        );
+
+        uint32_t actualInIf = logicalPortToIf[ocsId][logicalInPort];
+        uint32_t actualOutIf = logicalPortToIf[ocsId][logicalOutPort];
+
+        std::cout << "[LOAD OCS MAP] OCS " << ocsId
+                  << " logical " << logicalInPort
+                  << "(if " << actualInIf << ")"
+                  << " -> "
+                  << "logical " << logicalOutPort
+                  << "(if " << actualOutIf << ")"
+                  << std::endl;
+
+        ocsMappings[ocsId].push_back(std::make_pair(actualInIf, actualOutIf));
+    }
+
+    for (std::map<uint32_t, std::vector<std::pair<uint32_t, uint32_t> > >::iterator it = ocsMappings.begin();
+         it != ocsMappings.end(); ++it) {
+        uint32_t id = it->first;
+
+        Ptr<OcsNode> ocs = DynamicCast<OcsNode>(n.Get(id));
+        NS_ASSERT_MSG(ocs != 0, "OCS map points to a non-OCS node");
+
+        ocs->SetInitialMapping(it->second);
+    }
+
+    for (std::set<uint32_t>::iterator it = ocs_node_ids.begin();
+         it != ocs_node_ids.end(); ++it) {
+        if (ocsMappings.find(*it) == ocsMappings.end()) {
+            std::cout << "[WARN] OCS " << *it
+                      << " has no initial mapping"
+                      << std::endl;
+        }
+    }
 }

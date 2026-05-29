@@ -10,6 +10,8 @@ TRACE_OUTPUT_FILE mix/mix.tr {output file: packet-level events (enqu, dequ, pfc,
 FCT_OUTPUT_FILE mix/fct.txt {output file: flow completion time of different flows}
 PFC_OUTPUT_FILE mix/pfc.txt {output file: result of PFC}
 
+OCS_MAP_FILE mix/04-ocs_map.txt {input file: ocs port mapping}
+
 SIMULATOR_STOP_TIME 4.00 {simulation stop time}
 
 CC_MODE 3 {Specifying different CC. 1: DCQCN, 3: HPCC, 7: TIMELY, 8: DCTCP, 10: HPCC-PINT}

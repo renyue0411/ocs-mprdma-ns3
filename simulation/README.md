@@ -12,7 +12,7 @@ Please note if gcc version > 5, compilation will fail due to some ns3 code style
 
 ## Experiment config
 
-Please see `mix/config.txt` for example.
+Please see `mix/config_ocs.txt` for MPRDMA in OCS architecture example.
 
 `mix/config_doc.txt` is a explanation of the example (texts in {..} are explanations).
 
@@ -21,12 +21,12 @@ Please see `mix/config.txt` for example.
 ## Run
 
 The direct command to run is:
-`./waf --run 'scratch/mp-rdma-simulator mix/config.txt'`
+`./waf --run 'scratch/ocs-mprdma-simulator mix/config.txt'`
 
 ## Debug
 
 1. The direct command to debug is:
-`./waf --run scratch/mp-rdma-simulator --command-template="gdb --args %s mix/config.txt"`
+`./waf --run scratch/ocs-mprdma-simulator --command-template="gdb --args %s mix/config.txt"`
 2. At the GDB prompt, enter the `run` command to start the program.
 3. Analyzing errors
     - When the program crashes, GDB stops and you can use a command such as `bt` (backtrace) to view the call stack. This will show you the order in which each function was called when the crash occurred.
