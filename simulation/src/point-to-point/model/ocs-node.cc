@@ -31,16 +31,20 @@ OcsNode::InstallMapping(const std::vector<std::pair<uint32_t, uint32_t> >& mappi
     m_activeMap.clear();
 
     for (size_t i = 0; i < mapping.size(); ++i) {
-        uint32_t a = mapping[i].first;
-        uint32_t b = mapping[i].second;
+        uint32_t inPort = mapping[i].first;
+        uint32_t outPort = mapping[i].second;
 
-        // 默认双向 circuit
-        m_activeMap[a] = b;
-        m_activeMap[b] = a;
+        NS_ASSERT_MSG(
+            m_activeMap.find(inPort) == m_activeMap.end(),
+            "Duplicate OCS input port in mapping"
+        );
+
+        m_activeMap[inPort] = outPort;
 
         std::cout << "[OCS MAP] t=" << Simulator::Now().GetTimeStep()
                   << " node=" << GetId()
-                  << " " << a << "<->" << b << std::endl;
+                  << " " << inPort << "->" << outPort
+                  << std::endl;
     }
 }
 
@@ -61,11 +65,15 @@ OcsNode::RequestReconfiguration(
     m_pendingMap.clear();
 
     for (size_t i = 0; i < newMapping.size(); ++i) {
-        uint32_t a = newMapping[i].first;
-        uint32_t b = newMapping[i].second;
+        uint32_t inPort = newMapping[i].first;
+        uint32_t outPort = newMapping[i].second;
 
-        m_pendingMap[a] = b;
-        m_pendingMap[b] = a;
+        NS_ASSERT_MSG(
+            m_pendingMap.find(inPort) == m_pendingMap.end(),
+            "Duplicate OCS input port in pending mapping"
+        );
+
+        m_pendingMap[inPort] = outPort;
     }
 
     std::cout << "[OCS RECONFIG START] t=" << Simulator::Now().GetTimeStep()

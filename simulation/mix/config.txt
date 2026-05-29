@@ -6,7 +6,6 @@ PACKET_PAYLOAD_SIZE 1000
 TOPOLOGY_FILE mix/01-ocs_topology.txt
 FLOW_FILE mix/03-flow.txt
 TRACE_FILE mix/trace_no_ocs.txt
-OCS_NODE_LIST 1 2
 OCS_MAP_FILE mix/04-ocs_map.txt
 FCT_OUTPUT_FILE mix/ocs_fct.txt
 TRACE_OUTPUT_FILE mix/ocs.tr

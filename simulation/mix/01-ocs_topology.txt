@@ -1,10 +1,12 @@
-3 0 2
-0 2 100Gbps 0.001ms 0
-1 2 100Gbps 0.001ms 0
+3 0 1 2
+2
+0 2 0 0 100Gbps 0.001ms 0
+1 2 0 1 100Gbps 0.001ms 0
 
 
-First line: total node #, switch node #, link #
+First line: total node #, switch node #, ocs node #, link #
 Second line: switch node IDs...
-src0 dst0 rate delay error_rate
-src1 dst1 rate delay error_rate
+Third line: ocs node IDs...
+src dst src_port dst_port rate delay error
+src dst src_port dst_port rate delay error
 ...
