@@ -1,6 +1,6 @@
 # MP-RDMA NS-3 simulator
 
-This is a MP-RDMA NS-3 simulator based on the [HPCC: https://hpcc-group.github.io/](https://hpcc-group.github.io/) implementation for simulating the performance of MP-RDMA(Multi-Path RDMA) in OCS architecture.
+This is a MP-RDMA NS-3 simulator based on the [HPCC: https://hpcc-group.github.io/](https://hpcc-group.github.io/) implementation for simulating the performance of MP-RDMA(Multi-Path RDMA).
 
 ## Build
 
@@ -33,7 +33,7 @@ The direct command to run is:
     - Viewing the specific line of code and call stack that caused the crash can help you determine the cause of the crash.
 
 ## Files added/edited based on NS3
-### Original MP-RDMA
+
 - `internet/model/rocev2-data-header.cc/h`: the header of RDMA data packet
 - `internet/model/rocev2-ack-header.cc/h`: the header of RDMA ACK packet
 - `point-to-point/helper/mp-qbb-helper.cc/h`: the helper class for MP-QBB
@@ -47,5 +47,3 @@ The direct command to run is:
 - `applications/model/mp-rdma-client.cc/h`: the client of MP-RDMA
 - `network/utils/custom-header.cc/h`: a customized header class for speeding up header parsing
 - `point-to-point/model/mp-switch-node.cc/h`:  the node class for switch
-### OCS-related extensions
-- `point-to-point/model/ocs-node.cc/h`: implements a generic Optical Circuit Switch (OCS) node. The OCS data plane is modeled as a technology-agnostic circuit crossbar that forwards packets according to the currently installed port-to-port mapping.
