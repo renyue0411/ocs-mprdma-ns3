@@ -1,0 +1,14 @@
+
+# ns-3 build outputs
+simulation/build/
+
+# simulation trace outputs
+simulation/mix/*.tr
+simulation/mix/*_fct.txt
+simulation/mix/pfc.txt
+simulation/mix/qlen.txt
+
+# analysis generated trace outputs
+analysis/*.tr
+analysis/*_readable.txt
+analysis/flow_*.tr
