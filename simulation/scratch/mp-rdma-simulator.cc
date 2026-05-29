@@ -37,6 +37,10 @@
 #include <ns3/mp-switch-node.h>
 #include <ns3/sim-setting.h>
 
+// OCS node
+#include "ns3/ocs-node.h"
+#include <set>
+
 using namespace ns3;
 using namespace std;
 
@@ -55,6 +59,10 @@ double rate_decrease_interval = 4;
 uint32_t fast_recovery_times = 5;
 std::string rate_ai, rate_hai, min_rate = "100Mb/s";
 std::string dctcp_rate_ai = "1000Mb/s";
+
+// OCS node
+std::set<uint32_t> ocs_node_ids;
+std::string ocs_map_file = "";
 
 bool clamp_target_rate = false, l2_back_to_zero = false;
 double error_rate_per_link = 0.0;
@@ -128,12 +136,19 @@ struct FlowInput
 FlowInput flow_input = {0};
 uint32_t flow_num;
 
+void LoadOcsInitialMapping(NodeContainer &n);
+
 void ReadFlowInput()
 {
 	if (flow_input.idx < flow_num)
 	{
-		flowf >> flow_input.src >> flow_input.dst >> flow_input.pg >> flow_input.dport >> flow_input.maxPacketCount >> flow_input.start_time;
-		NS_ASSERT(n.Get(flow_input.src)->GetNodeType() == 0 && n.Get(flow_input.dst)->GetNodeType() == 0);
+		flowf >> flow_input.src >> flow_input.dst >> flow_input.pg
+		      >> flow_input.dport >> flow_input.maxPacketCount
+		      >> flow_input.start_time;
+		NS_ASSERT_MSG(flow_input.src < n.GetN(), "flow src node id out of range");
+		NS_ASSERT_MSG(flow_input.dst < n.GetN(), "flow dst node id out of range");
+		NS_ASSERT_MSG(n.Get(flow_input.src)->GetNodeType() == 0, "flow src is not host");
+		NS_ASSERT_MSG(n.Get(flow_input.dst)->GetNodeType() == 0, "flow dst is not host");
 	}
 }
 void ScheduleFlowInputs()
@@ -175,7 +190,6 @@ uint32_t ip_to_node_id(Ipv4Address ip)
 
 void qp_finish(FILE *fout, Ptr<MpRdmaQueuePair> q)
 {
-	printf("writing fct.txt.\n");
 	uint32_t sid = ip_to_node_id(q->sip), did = ip_to_node_id(q->dip);
 	uint64_t base_rtt = pairRtt[sid][did], b = pairBw[sid][did];
 	uint32_t total_bytes = q->m_size + ((q->m_size - 1) / packet_payload_size + 1) * (CustomHeader::GetStaticWholeHeaderSize() - IntHeader::GetStaticSize()); // translate to the minimum bytes required (with header but no INT)
@@ -278,7 +292,7 @@ void CalculateRoute(Ptr<Node> host)
 				txDelay[next] = txDelay[now] + packet_payload_size * 1000000000lu * 8 / it->second.bw;
 				bw[next] = std::min(bw[now], it->second.bw);
 				// we only enqueue switch, because we do not want packets to go through host as middle point
-				if (next->GetNodeType() == 1)
+				if (next->GetNodeType() > 0)
 					q.push_back(next);
 			}
 			// if 'now' is on the shortest path from 'next' to 'host'.
@@ -325,11 +339,15 @@ void SetRoutingEntries()
 			{
 				Ptr<Node> next = nexts[k];
 				uint32_t interface = nbr2if[node][next].idx;
-				if (node->GetNodeType() == 1)
-					DynamicCast<MpSwitchNode>(node)->AddTableEntry(dstAddr, interface);
-				else
-				{
+				if (node->GetNodeType() == 0) {
 					node->GetObject<MpRdmaDriver>()->m_rdma->AddTableEntry(dstAddr, interface);
+				}
+				else if (node->GetNodeType() == 1) {
+					DynamicCast<MpSwitchNode>(node)->AddTableEntry(dstAddr, interface);
+				}
+				else if (node->GetNodeType() == 2) {
+					// OCS 不使用 IP routing table。
+					// 它只根据当前 port-to-port circuit mapping 转发。
 				}
 			}
 		}
@@ -348,10 +366,15 @@ void TakeDownLink(NodeContainer n, Ptr<Node> a, Ptr<Node> b)
 	// clear routing tables
 	for (uint32_t i = 0; i < n.GetN(); i++)
 	{
-		if (n.Get(i)->GetNodeType() == 1)
+		if (n.Get(i)->GetNodeType() == 1) {
 			DynamicCast<MpSwitchNode>(n.Get(i))->ClearTable();
-		else
+		}
+		else if (n.Get(i)->GetNodeType() == 0) {
 			n.Get(i)->GetObject<MpRdmaDriver>()->m_rdma->ClearTable();
+		}
+		else if (n.Get(i)->GetNodeType() == 2) {
+			// OCS has no routing table.
+		}
 	}
 	DynamicCast<MpQbbNetDevice>(a->GetDevice(nbr2if[a][b].idx))->TakeDown();
 	DynamicCast<MpQbbNetDevice>(b->GetDevice(nbr2if[b][a].idx))->TakeDown();
@@ -766,6 +789,23 @@ int main(int argc, char *argv[])
 				conf >> pint_prob;
 				std::cout << "PINT_PROB\t\t\t\t" << pint_prob << '\n';
 			}
+			// OCS node
+			else if (key.compare("OCS_NODE_LIST") == 0) {
+				uint32_t cnt;
+				conf >> cnt;
+				std::cout << "OCS_NODE_LIST\t\t\tcount=" << cnt << " ids=";
+				for (uint32_t i = 0; i < cnt; i++) {
+					uint32_t id;
+					conf >> id;
+					ocs_node_ids.insert(id);
+					std::cout << id << " ";
+				}
+				std::cout << "\n";
+			}
+			else if (key.compare("OCS_MAP_FILE") == 0) {
+				conf >> ocs_map_file;
+				std::cout << "OCS_MAP_FILE\t\t\t" << ocs_map_file << "\n";
+			}
 			fflush(stdout);
 		}
 		conf.close();
@@ -826,12 +866,16 @@ int main(int argc, char *argv[])
 		topof >> sid;
 		node_type[sid] = 1;
 	}
-	for (uint32_t i = 0; i < node_num; i++)
-	{
-		if (node_type[i] == 0)
+	for (uint32_t i = 0; i < node_num; i++) {
+		if (ocs_node_ids.find(i) != ocs_node_ids.end()) {
+			Ptr<OcsNode> ocs = CreateObject<OcsNode>();
+			n.Add(ocs);
+			std::cout << "Create OCS node: " << i << std::endl;
+		}
+		else if (node_type[i] == 0) {
 			n.Add(CreateObject<Node>());
-		else
-		{
+		}
+		else {
 			Ptr<MpSwitchNode> sw = CreateObject<MpSwitchNode>();
 			n.Add(sw);
 			sw->SetAttribute("EcnEnabled", BooleanValue(enable_qcn));
@@ -942,6 +986,8 @@ int main(int argc, char *argv[])
 		DynamicCast<MpQbbNetDevice>(d.Get(0))->TraceConnectWithoutContext("QbbPfc", MakeBoundCallback(&get_pfc, pfc_file, DynamicCast<MpQbbNetDevice>(d.Get(0))));
 		DynamicCast<MpQbbNetDevice>(d.Get(1))->TraceConnectWithoutContext("QbbPfc", MakeBoundCallback(&get_pfc, pfc_file, DynamicCast<MpQbbNetDevice>(d.Get(1))));
 	}
+
+	LoadOcsInitialMapping(n);
 
 	nic_rate = get_nic_rate(n);
 
@@ -1063,7 +1109,9 @@ int main(int argc, char *argv[])
 		}
 	}
 	printf("maxRtt=%lu maxBdp=%lu\n", maxRtt, maxBdp);
-
+	
+	fflush(stdout);
+	
 	//
 	// setup switch CC
 	//
@@ -1080,7 +1128,7 @@ int main(int argc, char *argv[])
 	//
 	// add trace
 	//
-
+	//  trace setup" << std::endl;
 	NodeContainer trace_nodes;
 	for (uint32_t i = 0; i < trace_num; i++)
 	{
@@ -1094,12 +1142,15 @@ int main(int argc, char *argv[])
 	}
 
 	FILE *trace_output = fopen(trace_output_file.c_str(), "w");
-	if (enable_trace)
-		mpQbb.EnableTracing(trace_output, trace_nodes);
-
+	if (enable_trace) {
+		mpQbb.EnableTracing(trace_output, trace_nodes);	
+	}
 	// dump link speed to trace file
 	{
+		//  dump link speed" << std::endl;
+
 		SimSetting sim_setting;
+
 		for (auto i : nbr2if)
 		{
 			for (auto j : i.second)
@@ -1114,7 +1165,7 @@ int main(int argc, char *argv[])
 		sim_setting.Serialize(trace_output);
 	}
 
-	Ipv4GlobalRoutingHelper::PopulateRoutingTables();
+	// Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 
 	NS_LOG_INFO("Create Applications.");
 
@@ -1165,4 +1216,52 @@ int main(int argc, char *argv[])
 
 	endt = clock();
 	std::cout << (double)(endt - begint) / CLOCKS_PER_SEC << "\n";
+}
+
+void LoadOcsInitialMapping(NodeContainer &n)
+{
+    if (ocs_map_file.empty()) {
+        return;
+    }
+
+    std::ifstream fin(ocs_map_file.c_str());
+    if (!fin.is_open()) {
+        std::cout << "Cannot open OCS_MAP_FILE: " << ocs_map_file << std::endl;
+        return;
+    }
+
+    uint32_t ocsId, pairNum;
+    fin >> ocsId >> pairNum;
+
+    Ptr<OcsNode> ocs = DynamicCast<OcsNode>(n.Get(ocsId));
+    NS_ASSERT_MSG(ocs != 0, "OCS_MAP_FILE points to a non-OCS node");
+
+    std::vector<std::pair<uint32_t, uint32_t> > mapping;
+
+    for (uint32_t i = 0; i < pairNum; i++) {
+        uint32_t peerA, peerB;
+        fin >> peerA >> peerB;
+
+        Ptr<Node> ocsNode = n.Get(ocsId);
+        Ptr<Node> aNode = n.Get(peerA);
+        Ptr<Node> bNode = n.Get(peerB);
+
+        NS_ASSERT_MSG(nbr2if[ocsNode].find(aNode) != nbr2if[ocsNode].end(),
+                      "peerA is not directly connected to OCS");
+        NS_ASSERT_MSG(nbr2if[ocsNode].find(bNode) != nbr2if[ocsNode].end(),
+                      "peerB is not directly connected to OCS");
+
+        uint32_t portA = nbr2if[ocsNode][aNode].idx;
+        uint32_t portB = nbr2if[ocsNode][bNode].idx;
+
+        std::cout << "[LOAD OCS MAP] OCS " << ocsId
+                  << " peer " << peerA << "(port " << portA << ")"
+                  << " <-> "
+                  << "peer " << peerB << "(port " << portB << ")"
+                  << std::endl;
+
+        mapping.push_back(std::make_pair(portA, portB));
+    }
+
+    ocs->SetInitialMapping(mapping);
 }

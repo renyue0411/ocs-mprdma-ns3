@@ -243,7 +243,6 @@ namespace ns3
 
     void MpQbbNetDevice::TransmitComplete(void)
     {
-        printf("TransmitComplete()\n");
         NS_LOG_FUNCTION(this);
         NS_ASSERT_MSG(m_txMachineState == BUSY, "Must be BUSY if transmitting");
         m_txMachineState = READY;

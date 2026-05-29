@@ -16,7 +16,20 @@ namespace ns3
 #ifdef PRINT_LOG
 #undef PRINT_LOG
 #endif
-#define PRINT_LOG 1
+#ifndef MP_RDMA_DEBUG
+#define MP_RDMA_DEBUG 0
+#endif
+#define PRINT_LOG MP_RDMA_DEBUG
+
+#if MP_RDMA_DEBUG
+#define MP_RDMA_DEBUG_PRINTF(...) printf(__VA_ARGS__)
+#else
+#define MP_RDMA_DEBUG_PRINTF(...) \
+    do                            \
+    {                             \
+    } while (0)
+#endif
+
     // 注册类型
     TypeId MpRdmaHw::GetTypeId(void)
     {
@@ -59,11 +72,11 @@ namespace ns3
 
     Ptr<Packet> MpRdmaHw::GetNxtPacket(Ptr<MpRdmaQueuePair> qp)
     {
-        printf("GetNxtPacket()\n");
+        MP_RDMA_DEBUG_PRINTF("GetNxtPacket()\n");
         // return null if no more packets to send
         if (qp->m_vpQueue.empty())
         {
-            printf("m_vpQueue is empty\n");
+            MP_RDMA_DEBUG_PRINTF("m_vpQueue is empty\n");
             return nullptr;
         }
 
@@ -85,31 +98,31 @@ namespace ns3
             uint32_t payload_size = qp->GetPacketsLeft() == 1 ? qp->GetBytesLeft() : m_mtu;
             p = Create<Packet>(payload_size);
             // if time arrive or meet the last packet, set synchronise and ReTx
-            printf("qp->m_lastSyncTime = %lld\n", qp->m_lastSyncTime.GetTimeStep());
-            printf("m_alpha * m_delta / (qp->m_cwnd / qp->m_baseRtt) = %f\n",
+            MP_RDMA_DEBUG_PRINTF("qp->m_lastSyncTime = %lld\n", qp->m_lastSyncTime.GetTimeStep());
+            MP_RDMA_DEBUG_PRINTF("m_alpha * m_delta / (qp->m_cwnd / qp->m_baseRtt) = %f\n",
                    m_alpha * m_delta / (qp->m_cwnd / qp->m_baseRtt));
-            printf("qp->m_lastSyncTime + m_alpha * m_delta / (qp->m_cwnd / qp->m_baseRtt) = %f\n",
+            MP_RDMA_DEBUG_PRINTF("qp->m_lastSyncTime + m_alpha * m_delta / (qp->m_cwnd / qp->m_baseRtt) = %f\n",
                    (qp->m_lastSyncTime.GetTimeStep() + m_alpha * m_delta / (qp->m_cwnd / qp->m_baseRtt)));
-            printf("Simulator::Now().GetTimeStep() = %f\n", static_cast<double>(Simulator::Now().GetTimeStep()));
-            printf("qp->m_size: %llu\n", qp->m_size);
-            printf("m_mtu: %lu\n", m_mtu);
-            printf("qp->snd_done: %llu\n", qp->snd_done);
-            printf("qp->m_size / m_mtu: %llu\n", qp->m_size / m_mtu);
+            MP_RDMA_DEBUG_PRINTF("Simulator::Now().GetTimeStep() = %f\n", static_cast<double>(Simulator::Now().GetTimeStep()));
+            MP_RDMA_DEBUG_PRINTF("qp->m_size: %llu\n", qp->m_size);
+            MP_RDMA_DEBUG_PRINTF("m_mtu: %lu\n", m_mtu);
+            MP_RDMA_DEBUG_PRINTF("qp->snd_done: %llu\n", qp->snd_done);
+            MP_RDMA_DEBUG_PRINTF("qp->m_size / m_mtu: %llu\n", qp->m_size / m_mtu);
             if (qp->m_lastSyncTime.GetTimeStep() + m_alpha * m_delta / (qp->m_cwnd / qp->m_baseRtt) <
                     static_cast<double>(Simulator::Now().GetTimeStep()) ||
                 (qp->m_size + (m_mtu - 1)) / m_mtu == qp->snd_done)
             {
                 // rocev2.SetSynchronise(1);
-                printf("SetSynchronise(1)\n");
+                MP_RDMA_DEBUG_PRINTF("SetSynchronise(1)\n");
                 seqTs.SetSynchronise(1);
-                printf("seqTs.GetSynchronise(): %u\n", seqTs.GetSynchronise());
+                MP_RDMA_DEBUG_PRINTF("seqTs.GetSynchronise(): %u\n", seqTs.GetSynchronise());
                 qp->m_lastSyncTime = Simulator::Now();
             }
             else
             {
-                printf("SetSynchronise(0)\n");
+                MP_RDMA_DEBUG_PRINTF("SetSynchronise(0)\n");
                 // seqTs.SetSynchronise(0);
-                printf("seqTs.GetSynchronise(): %u\n", seqTs.GetSynchronise());
+                MP_RDMA_DEBUG_PRINTF("seqTs.GetSynchronise(): %u\n", seqTs.GetSynchronise());
             }
             seqTs.SetSeq(qp->snd_done);
             qp->snd_done++;
@@ -134,7 +147,7 @@ namespace ns3
 
         VirtualPath vp = qp->m_vpQueue.front();
         qp->sport = vp.sPort;
-        printf("qp->sport = %d\n", qp->sport);
+        MP_RDMA_DEBUG_PRINTF("qp->sport = %d\n", qp->sport);
         if (vp.numSend == 1)
         {
             qp->m_vpQueue.pop();
@@ -180,33 +193,33 @@ namespace ns3
 
     int MpRdmaHw::ReceiveUdp(Ptr<Packet> p, CustomHeader &ch)
     {
-        printf("ReceiveUDP()\n");
+        MP_RDMA_DEBUG_PRINTF("ReceiveUDP()\n");
         Ptr<MpRdmaRxQueuePair> rxMpQp = GetRxQp(ch.dip, ch.sip, ch.udp.dport,
                                                 ch.udp.sport, ch.udp.pg, true);
         if (ch.udp.seq >= rxMpQp->aack + rxMpQp->m_bitmapSize)
         {
-            printf("out of window, drop the packer\n");
+            MP_RDMA_DEBUG_PRINTF("out of window, drop the packer\n");
             // out of window, drop the packet
             return 1;
         }
-        printf("ch.udp.seq = %u\n", ch.udp.seq);
-        printf("rxMpQp->aack = %u\n", rxMpQp->aack);
-        printf("ch.udp.seq < rxMpQp->aack = %d\n", ch.udp.seq < rxMpQp->aack);
-        printf("(rxMpQp->aack_idx + (ch.udp.seq - rxMpQp->aack)) %% rxMpQp->m_bitmapSize = %d\n",
+        MP_RDMA_DEBUG_PRINTF("ch.udp.seq = %u\n", ch.udp.seq);
+        MP_RDMA_DEBUG_PRINTF("rxMpQp->aack = %u\n", rxMpQp->aack);
+        MP_RDMA_DEBUG_PRINTF("ch.udp.seq < rxMpQp->aack = %d\n", ch.udp.seq < rxMpQp->aack);
+        MP_RDMA_DEBUG_PRINTF("(rxMpQp->aack_idx + (ch.udp.seq - rxMpQp->aack)) %% rxMpQp->m_bitmapSize = %d\n",
                (rxMpQp->aack_idx + (ch.udp.seq - rxMpQp->aack)) % rxMpQp->m_bitmapSize);
-        printf("rxMpQp->m_bitmapSize = %u\n", rxMpQp->m_bitmapSize);
+        MP_RDMA_DEBUG_PRINTF("rxMpQp->m_bitmapSize = %u\n", rxMpQp->m_bitmapSize);
         if (ch.udp.seq < rxMpQp->aack /*||
             rxMpQp->m_bitmap[(rxMpQp->aack_idx + (ch.udp.seq - rxMpQp->aack)) % rxMpQp->m_bitmapSize] == 1*/
         )
         {
             // duplicate packet, drop it
-            printf("duplicate packet, drop it\n");
+            MP_RDMA_DEBUG_PRINTF("duplicate packet, drop it\n");
             return 2;
         }
         if (ch.udp.seq > rxMpQp->max_rcv_seq)
         {
             rxMpQp->max_rcv_seq = ch.udp.seq;
-            printf("rxMpQp->max_rcv_seq = %u\n", rxMpQp->max_rcv_seq);
+            MP_RDMA_DEBUG_PRINTF("rxMpQp->max_rcv_seq = %u\n", rxMpQp->max_rcv_seq);
         }
         /**
          * In here, we only mark the packet as received. We don't
@@ -241,7 +254,7 @@ namespace ns3
                                                    0));
         // default set ACK
         head.SetProtocol(0xFC);
-        printf("ch.udp.synchronise = %u\n", ch.udp.synchronise);
+        MP_RDMA_DEBUG_PRINTF("ch.udp.synchronise = %u\n", ch.udp.synchronise);
         if (ch.udp.synchronise == 1 && !doSynch(rxMpQp))
         {
             // if sync fail set NACK
@@ -253,7 +266,7 @@ namespace ns3
         head.SetIdentification(rxMpQp->m_ipid++);
         seqh.SetReTx(ch.udp.ReTx);  // set ReTx rely on the send packet
         seqh.SetAACK(rxMpQp->aack); // set AACK
-        printf("seqh.GetAACK(): %u\n", seqh.GetAACK());
+        MP_RDMA_DEBUG_PRINTF("seqh.GetAACK(): %u\n", seqh.GetAACK());
         // add headers in order
         // newp->AddHeader(roCEv2AckH);
         newp->AddHeader(seqh);
@@ -268,7 +281,7 @@ namespace ns3
 
     void MpRdmaHw::PktSent(Ptr<MpRdmaQueuePair> qp, Ptr<Packet> pkt, Time interframeGap)
     {
-        printf("PktSent()\n");
+        MP_RDMA_DEBUG_PRINTF("PktSent()\n");
         UpdateNextAvail(qp, interframeGap, pkt->GetSize());
     }
 
@@ -287,7 +300,7 @@ namespace ns3
 
     int MpRdmaHw::ReceiveAck(Ptr<Packet> p, CustomHeader &ch)
     {
-        printf("ReceiveACK()\n");
+        MP_RDMA_DEBUG_PRINTF("ReceiveACK()\n");
         Ptr<MpRdmaQueuePair> qp = GetQp(ch.sip, ch.ack.sport, ch.udp.pg);
         uint32_t nic_idx = GetNicIdxOfQp(qp);
         Ptr<MpQbbNetDevice> dev = m_nic[nic_idx].dev;
@@ -304,7 +317,7 @@ namespace ns3
 
         if (ch.l3Prot == 0xFD)
         { // NACK
-            printf("NACK ch.ack.seq: %u\n", ch.ack.seq);
+            MP_RDMA_DEBUG_PRINTF("NACK ch.ack.seq: %u\n", ch.ack.seq);
             // qp->m_mode = MpRdmaQueuePair::MP_RDMA_HW_MODE_RECOVERY;
             // qp->snd_retx = ch.ack.seq;
             // qp->recovery = qp->snd_done;
@@ -313,23 +326,23 @@ namespace ns3
         { // ACK
             if (ch.ack.seq >= qp->snd_una && ch.ack.seq < qp->snd_done)
             {
-                printf("do inflate++\n");
+                MP_RDMA_DEBUG_PRINTF("do inflate++\n");
                 qp->m_inflate++;
             }
             else
             {
                 // Ghost ACK, return 1
-                printf("Ghost ACK, return 1\n");
+                MP_RDMA_DEBUG_PRINTF("Ghost ACK, return 1\n");
                 return 1;
             }
 
             if (ch.ack.seq <= qp->max_acked_seq - m_delta && ch.ack.ReTx == 0)
             {
                 // out of order ACK, drop it, prune branch
-                printf("out of order ACK, drop it, prune branch\n");
+                MP_RDMA_DEBUG_PRINTF("out of order ACK, drop it, prune branch\n");
                 return 2;
             }
-            printf("ch.ack.AACK = %u\n", ch.ack.AACK);
+            MP_RDMA_DEBUG_PRINTF("ch.ack.AACK = %u\n", ch.ack.AACK);
             if (ch.ack.AACK > qp->snd_una)
             { // update m_inflate, snd_una
                 qp->m_inflate -= ch.ack.AACK - qp->snd_una;
@@ -344,11 +357,14 @@ namespace ns3
             {
                 qp->max_acked_seq = ch.ack.seq;
             }
-            printf("qp->cwmd = %f\n", qp->m_cwnd);
-            printf("qp->m_inflate = %u\n", qp->m_inflate);
-            printf("qp->snd_nxt = %llu\n", qp->snd_nxt);
-            printf("qp->snd_una = %llu\n", qp->snd_una);
-            if (ch.ack.AACK == (qp->m_size + (m_mtu - 1)) / m_mtu)
+            MP_RDMA_DEBUG_PRINTF("qp->cwmd = %f\n", qp->m_cwnd);
+            MP_RDMA_DEBUG_PRINTF("qp->m_inflate = %u\n", qp->m_inflate);
+            MP_RDMA_DEBUG_PRINTF("qp->snd_nxt = %llu\n", qp->snd_nxt);
+            MP_RDMA_DEBUG_PRINTF("qp->snd_una = %llu\n", qp->snd_una);
+            uint32_t totalPkts = (qp->m_size + (m_mtu - 1)) / m_mtu;
+
+            if (ch.ack.AACK == totalPkts ||
+                ch.ack.seq + 1 == totalPkts)
             {
                 QpComplete(qp);
                 return 0;
@@ -356,13 +372,13 @@ namespace ns3
             uint32_t awnd = qp->m_cwnd + qp->m_inflate - (qp->snd_nxt - qp->snd_una);
             if (qp->GetPacketsLeft() == 0)
             { // if there is no packet to send, do path window redution
-                printf("do path window redution\n");
+                MP_RDMA_DEBUG_PRINTF("do path window redution\n");
                 qp->m_cwnd = std::max(qp->m_cwnd - 1, 1.0);
                 return 0;
             }
-            printf("awnd = %d\n", awnd);
+            MP_RDMA_DEBUG_PRINTF("awnd = %d\n", awnd);
             uint8_t numSend = std::min(std::min(awnd, 2u), qp->GetPacketsLeft());
-            printf("numSend = %d\n", numSend);
+            MP_RDMA_DEBUG_PRINTF("numSend = %d\n", numSend);
             qp->m_vpQueue.push({ch.ack.dport, numSend, 0});
             qp->snd_nxt += numSend;
             // ACK may advance the on-the-fly window, allowing more packets to send
@@ -408,8 +424,8 @@ namespace ns3
      */
     bool MpRdmaHw::doSynch(Ptr<MpRdmaRxQueuePair> qp)
     {
-        printf("doSynch()\n");
-        printf("std::min(m_delta, qp->max_rcv_seq + 1 - qp->aack) = %d\n",
+        MP_RDMA_DEBUG_PRINTF("doSynch()\n");
+        MP_RDMA_DEBUG_PRINTF("std::min(m_delta, qp->max_rcv_seq + 1 - qp->aack) = %d\n",
                std::min(m_delta, qp->max_rcv_seq + 1 - qp->aack));
 
         int distance = std::min(m_delta, qp->max_rcv_seq + 1 - qp->aack);
@@ -419,7 +435,7 @@ namespace ns3
             if (qp->m_bitmap[(qp->aack_idx + i) % qp->m_bitmapSize] == 0)
             {
                 moveRcvWnd(qp, i);
-                printf("doSynch() return false at %d\n", i);
+                MP_RDMA_DEBUG_PRINTF("doSynch() return false at %d\n", i);
                 return false;
             }
             else
@@ -442,7 +458,7 @@ namespace ns3
         }
         // moveRcvWnd(qp, std::min(m_delta, qp->max_rcv_seq + 1 - qp->aack));
         moveRcvWnd(qp, distance);
-        printf("doSynch() return true\n");
+        MP_RDMA_DEBUG_PRINTF("doSynch() return true\n");
         return true;
     }
 
@@ -569,7 +585,7 @@ namespace ns3
 
     void MpRdmaHw::SetLinkDown(Ptr<MpQbbNetDevice> dev)
     {
-        printf("RdmaHw: node:%u a link down\n", m_node->GetId());
+        MP_RDMA_DEBUG_PRINTF("RdmaHw: node:%u a link down\n", m_node->GetId());
     }
 
     void MpRdmaHw::QpComplete(Ptr<MpRdmaQueuePair> qp)
