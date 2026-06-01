@@ -4,11 +4,13 @@
 #include <unordered_map>
 #include <vector>
 #include <utility>
+#include <map>
 
 #include "ns3/node.h"
 #include "ns3/packet.h"
 #include "ns3/nstime.h"
 #include "ns3/custom-header.h"
+#include "qbb-net-device.h"
 #include "mp-qbb-net-device.h"
 
 namespace ns3 {
@@ -36,6 +38,8 @@ public:
     // OCS 第一版不做 MMU/PFC/ECN，先空实现。
     virtual void SwitchNotifyDequeue(uint32_t ifIndex, uint32_t qIndex, Ptr<Packet> p);
 
+    void DumpStats() const;
+
 private:
     void FinishReconfiguration();
     void InstallMapping(const std::vector<std::pair<uint32_t, uint32_t> >& mapping);
@@ -49,6 +53,12 @@ private:
 
     // pending map: reconfiguration 完成后启用
     std::unordered_map<uint32_t, uint32_t> m_pendingMap;
+
+    std::map<uint32_t, uint64_t> m_dataPacketsByOutPort;
+    std::map<uint32_t, uint64_t> m_dataBytesByOutPort;
+
+    std::map<uint32_t, uint64_t> m_ackPacketsByOutPort;
+    std::map<uint32_t, uint64_t> m_ackBytesByOutPort;
 };
 
 } // namespace ns3

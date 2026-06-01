@@ -1,4 +1,4 @@
-# project ns (3.18) configured on Fri May 29 15:59:21 2026 by
+# project ns (3.18) configured on Mon Jun  1 11:13:33 2026 by
 # waf 1.7.11 (abi 98, python 20712f0 on linux2)
 # using ./waf configure
 #
@@ -112,7 +112,7 @@ from /home/keith/myrdma/NS3-MP-RDMA/simulation/bindings/python: Test does not bu
     raise Errors.BuildError(self.producer.error)
 BuildError: Build failed
  -> task in 'testprog' failed (exit status 1): 
-	{task 125323386788304: cxxprogram test.cpp.1.o -> testprog}
+	{task 128169417816784: cxxprogram test.cpp.1.o -> testprog}
 ['g++-5', '-Wl,-Bsymbolic-functions', '-Wl,-z,relro', 'test.cpp.1.o', '-o', '/home/keith/myrdma/NS3-MP-RDMA/simulation/build/.conf_check_3b2479b91ea1f8aedc2bbc867fa4858e/testbuild/testprog', '-Wl,-Bstatic', '-Wl,-Bdynamic', '-L/usr/lib', '-lpython2.7']
 
 not found
@@ -147,7 +147,7 @@ from /home/keith/myrdma/NS3-MP-RDMA/simulation/bindings/python: Test does not bu
     raise Errors.BuildError(self.producer.error)
 BuildError: Build failed
  -> task in 'testprog' failed (exit status 1): 
-	{task 125323386925968: cxxprogram test.cpp.1.o -> testprog}
+	{task 128169417958544: cxxprogram test.cpp.1.o -> testprog}
 ['g++-5', '-Wl,-Bsymbolic-functions', '-Wl,-z,relro', 'test.cpp.1.o', '-o', '/home/keith/myrdma/NS3-MP-RDMA/simulation/build/.conf_check_d17a70babee59afe3e1c1c75ef40e077/testbuild/testprog', '-Wl,-Bstatic', '-Wl,-Bdynamic', '-L/usr/lib/python2.7/config-x86_64-linux-gnu', '-lpython2.7']
 
 not found
@@ -182,7 +182,7 @@ from /home/keith/myrdma/NS3-MP-RDMA/simulation/bindings/python: Test does not bu
     raise Errors.BuildError(self.producer.error)
 BuildError: Build failed
  -> task in 'testprog' failed (exit status 1): 
-	{task 125323386927440: cxxprogram test.cpp.1.o -> testprog}
+	{task 128169417960016: cxxprogram test.cpp.1.o -> testprog}
 ['g++-5', '-Wl,-Bsymbolic-functions', '-Wl,-z,relro', 'test.cpp.1.o', '-o', '/home/keith/myrdma/NS3-MP-RDMA/simulation/build/.conf_check_de4494721897d66ec0b1f0c4e9216223/testbuild/testprog', '-Wl,-Bstatic', '-Wl,-Bdynamic', '-L/usr/libs', '-lpython2.7']
 
 not found
@@ -217,7 +217,7 @@ from /home/keith/myrdma/NS3-MP-RDMA/simulation/bindings/python: Test does not bu
     raise Errors.BuildError(self.producer.error)
 BuildError: Build failed
  -> task in 'testprog' failed (exit status 1): 
-	{task 125323387261328: cxxprogram test.cpp.1.o -> testprog}
+	{task 128169418289808: cxxprogram test.cpp.1.o -> testprog}
 ['g++-5', '-Wl,-Bsymbolic-functions', '-Wl,-z,relro', 'test.cpp.1.o', '-o', '/home/keith/myrdma/NS3-MP-RDMA/simulation/build/.conf_check_485297a0f5930f4f3dbf85136ce5b31d/testbuild/testprog', '-Wl,-Bstatic', '-Wl,-Bdynamic', '-L/usr/lib', '-lpython2.7m']
 
 not found
@@ -252,7 +252,7 @@ from /home/keith/myrdma/NS3-MP-RDMA/simulation/bindings/python: Test does not bu
     raise Errors.BuildError(self.producer.error)
 BuildError: Build failed
  -> task in 'testprog' failed (exit status 1): 
-	{task 125323387263120: cxxprogram test.cpp.1.o -> testprog}
+	{task 128169418291600: cxxprogram test.cpp.1.o -> testprog}
 ['g++-5', '-Wl,-Bsymbolic-functions', '-Wl,-z,relro', 'test.cpp.1.o', '-o', '/home/keith/myrdma/NS3-MP-RDMA/simulation/build/.conf_check_47edc30cf74b5b20788533ecb328dd94/testbuild/testprog', '-Wl,-Bstatic', '-Wl,-Bdynamic', '-L/usr/lib/python2.7/config-x86_64-linux-gnu', '-lpython2.7m']
 
 not found
@@ -287,7 +287,7 @@ from /home/keith/myrdma/NS3-MP-RDMA/simulation/bindings/python: Test does not bu
     raise Errors.BuildError(self.producer.error)
 BuildError: Build failed
  -> task in 'testprog' failed (exit status 1): 
-	{task 125323386927888: cxxprogram test.cpp.1.o -> testprog}
+	{task 128169417960464: cxxprogram test.cpp.1.o -> testprog}
 ['g++-5', '-Wl,-Bsymbolic-functions', '-Wl,-z,relro', 'test.cpp.1.o', '-o', '/home/keith/myrdma/NS3-MP-RDMA/simulation/build/.conf_check_bb4ab0a2da6fec0567ee396296163b23/testbuild/testprog', '-Wl,-Bstatic', '-Wl,-Bdynamic', '-L/usr/libs', '-lpython2.7m']
 
 not found
@@ -322,7 +322,7 @@ from /home/keith/myrdma/NS3-MP-RDMA/simulation/bindings/python: Test does not bu
     raise Errors.BuildError(self.producer.error)
 BuildError: Build failed
  -> task in 'testprog' failed (exit status 1): 
-	{task 125323387263056: cxxprogram test.cpp.1.o -> testprog}
+	{task 128169418291536: cxxprogram test.cpp.1.o -> testprog}
 ['g++-5', '-Wl,-Bsymbolic-functions', '-Wl,-z,relro', 'test.cpp.1.o', '-o', '/home/keith/myrdma/NS3-MP-RDMA/simulation/build/.conf_check_8d4c00df8e5bde69c9f1f5580d7cb80e/testbuild/testprog', '-Wl,-Bstatic', '-Wl,-Bdynamic', '-L/usr/lib', '-lpython27']
 
 not found
@@ -357,7 +357,7 @@ from /home/keith/myrdma/NS3-MP-RDMA/simulation/bindings/python: Test does not bu
     raise Errors.BuildError(self.producer.error)
 BuildError: Build failed
  -> task in 'testprog' failed (exit status 1): 
-	{task 125323387318352: cxxprogram test.cpp.1.o -> testprog}
+	{task 128169418346832: cxxprogram test.cpp.1.o -> testprog}
 ['g++-5', '-Wl,-Bsymbolic-functions', '-Wl,-z,relro', 'test.cpp.1.o', '-o', '/home/keith/myrdma/NS3-MP-RDMA/simulation/build/.conf_check_9019fe94d6dd549565dfd45921342541/testbuild/testprog', '-Wl,-Bstatic', '-Wl,-Bdynamic', '-L/usr/lib/python2.7/config-x86_64-linux-gnu', '-lpython27']
 
 not found
@@ -392,7 +392,7 @@ from /home/keith/myrdma/NS3-MP-RDMA/simulation/bindings/python: Test does not bu
     raise Errors.BuildError(self.producer.error)
 BuildError: Build failed
  -> task in 'testprog' failed (exit status 1): 
-	{task 125323387319952: cxxprogram test.cpp.1.o -> testprog}
+	{task 128169418348432: cxxprogram test.cpp.1.o -> testprog}
 ['g++-5', '-Wl,-Bsymbolic-functions', '-Wl,-z,relro', 'test.cpp.1.o', '-o', '/home/keith/myrdma/NS3-MP-RDMA/simulation/build/.conf_check_d0a3a3e87346a24a0cb64337d5363d6d/testbuild/testprog', '-Wl,-Bstatic', '-Wl,-Bdynamic', '-L/usr/libs', '-lpython27']
 
 not found
@@ -443,7 +443,7 @@ from /home/keith/myrdma/NS3-MP-RDMA/simulation/bindings/python: Test does not bu
     raise Errors.BuildError(self.producer.error)
 BuildError: Build failed
  -> task in 'testprog' failed (exit status 1): 
-	{task 125323387322256: cxx test.cpp -> test.cpp.1.o}
+	{task 128169418350160: cxx test.cpp -> test.cpp.1.o}
 ['g++-5', '-O0', '-ggdb', '-g3', '-std=gnu++11', '-fno-strict-aliasing', '-fwrapv', '-fdebug-prefix-map=/build/python2.7-QOVJtE/python2.7-2.7.18=.', '-fstack-protector-strong', '-fno-strict-aliasing', '-I/usr/include/python2.7', '-DNS3_ASSERT_ENABLE', '-DNS3_LOG_ENABLE', '-DPYTHONDIR="/usr/local/lib/python2.7/dist-packages"', '-DPYTHONARCHDIR="/usr/local/lib/python2.7/dist-packages"', '-DNDEBUG', '-D_FORTIFY_SOURCE=2', '../test.cpp', '-c', '-o', 'test.cpp.1.o']
 
 :-(
@@ -515,7 +515,7 @@ from /home/keith/myrdma/NS3-MP-RDMA/simulation/src/core: Test does not build: Tr
     raise Errors.BuildError(self.producer.error)
 BuildError: Build failed
  -> task in 'testprog' failed (exit status 1): 
-	{task 125323386965392: cxx test.cpp -> test.cpp.1.o}
+	{task 128169417994000: cxx test.cpp -> test.cpp.1.o}
 ['g++-5', '-O0', '-ggdb', '-g3', '-std=gnu++11', '-DNS3_ASSERT_ENABLE', '-DNS3_LOG_ENABLE', '../test.cpp', '-c', '-o', 'test.cpp.1.o']
 
 not found
@@ -603,7 +603,7 @@ from /home/keith/myrdma/NS3-MP-RDMA/simulation/src/core: Test does not build: Tr
     raise Errors.BuildError(self.producer.error)
 BuildError: Build failed
  -> task in 'testprog' failed (exit status 1): 
-	{task 125323387017680: cxx test.cpp -> test.cpp.1.o}
+	{task 128169418046160: cxx test.cpp -> test.cpp.1.o}
 ['g++-5', '-O0', '-ggdb', '-g3', '-std=gnu++11', '-DNS3_ASSERT_ENABLE', '-DNS3_LOG_ENABLE', '-DHAVE___UINT128_T=1', '-DINT64X64_USE_128=1', '-DHAVE_STDINT_H=1', '-DHAVE_INTTYPES_H=1', '../test.cpp', '-c', '-o', 'test.cpp.1.o']
 
 not found
@@ -778,7 +778,7 @@ from /home/keith/myrdma/NS3-MP-RDMA/simulation/src/core: Test does not build: Tr
     raise Errors.BuildError(self.producer.error)
 BuildError: Build failed
  -> task in 'testprog' failed (exit status 1): 
-	{task 125323386964176: cxx test.cpp -> test.cpp.1.o}
+	{task 128169417993872: cxx test.cpp -> test.cpp.1.o}
 ['g++-5', '-O0', '-ggdb', '-g3', '-std=gnu++11', '-DNS3_ASSERT_ENABLE', '-DNS3_LOG_ENABLE', '-DHAVE___UINT128_T=1', '-DINT64X64_USE_128=1', '-DHAVE_SYS_TYPES_H=1', '-DHAVE_SYS_STAT_H=1', '-DHAVE_DIRENT_H=1', '-DHAVE_STDLIB_H=1', '-DHAVE_GETENV=1', '-DHAVE_SIGNAL_H=1', '-DHAVE_PTHREAD_H=1', '-DHAVE_STDINT_H=1', '-DHAVE_INTTYPES_H=1', '../test.cpp', '-c', '-o', 'test.cpp.1.o']
 
 not found

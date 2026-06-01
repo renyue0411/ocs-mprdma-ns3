@@ -40,6 +40,7 @@
 
 // OCS node
 #include "ns3/ocs-node.h"
+#include "ns3/ocs-controller.h"
 #include <set>
 
 using namespace ns3;
@@ -64,6 +65,13 @@ std::string dctcp_rate_ai = "1000Mb/s";
 // OCS node
 std::set<uint32_t> ocs_node_ids;
 std::string ocs_map_file = "";
+uint32_t ocs_ctrl_enable = 0;
+std::string ocs_ctrl_mode = "rr";
+uint64_t ocs_ctrl_interval_us = 100000;
+uint64_t ocs_reconfig_delay_us = 10;
+uint64_t ocs_ctrl_start_us = 0;
+bool ocs_ctrl_start_set = false;
+OcsController* g_ocs_controller = 0;
 
 bool clamp_target_rate = false, l2_back_to_zero = false;
 double error_rate_per_link = 0.0;
@@ -142,6 +150,7 @@ FlowInput flow_input = {0};
 uint32_t flow_num;
 
 void LoadOcsInitialMapping(NodeContainer &n);
+void StartOcsController(NodeContainer &n);
 
 void ReadFlowInput()
 {
@@ -799,6 +808,27 @@ int main(int argc, char *argv[])
 				conf >> ocs_map_file;
 				std::cout << "OCS_MAP_FILE\t\t\t" << ocs_map_file << "\n";
 			}
+			else if (key.compare("OCS_CTRL_ENABLE") == 0) {
+				conf >> ocs_ctrl_enable;
+				std::cout << "OCS_CTRL_ENABLE\t\t" << ocs_ctrl_enable << "\n";
+			}
+			else if (key.compare("OCS_CTRL_MODE") == 0) {
+				conf >> ocs_ctrl_mode;
+				std::cout << "OCS_CTRL_MODE\t\t\t" << ocs_ctrl_mode << "\n";
+			}
+			else if (key.compare("OCS_CTRL_INTERVAL_US") == 0) {
+				conf >> ocs_ctrl_interval_us;
+				std::cout << "OCS_CTRL_INTERVAL_US\t\t" << ocs_ctrl_interval_us << "\n";
+			}
+			else if (key.compare("OCS_RECONFIG_DELAY_US") == 0) {
+				conf >> ocs_reconfig_delay_us;
+				std::cout << "OCS_RECONFIG_DELAY_US\t" << ocs_reconfig_delay_us << "\n";
+			}
+			else if (key.compare("OCS_CTRL_START_US") == 0) {
+				conf >> ocs_ctrl_start_us;
+				ocs_ctrl_start_set = true;
+				std::cout << "OCS_CTRL_START_US\t\t" << ocs_ctrl_start_us << "\n";
+			}
 			fflush(stdout);
 		}
 		conf.close();
@@ -1103,6 +1133,7 @@ int main(int argc, char *argv[])
 	}
 
 	LoadOcsInitialMapping(n);
+	StartOcsController(n);
 
 	nic_rate = get_nic_rate(n);
 
@@ -1325,6 +1356,16 @@ int main(int argc, char *argv[])
 	NS_LOG_INFO("Run Simulation.");
 	Simulator::Stop(Seconds(simulator_stop_time));
 	Simulator::Run();
+	for (std::set<uint32_t>::iterator it = ocs_node_ids.begin();
+		it != ocs_node_ids.end();
+		++it) {
+
+		Ptr<OcsNode> ocs = DynamicCast<OcsNode>(n.Get(*it));
+
+		if (ocs != 0) {
+			ocs->DumpStats();
+		}
+	}
 	Simulator::Destroy();
 	NS_LOG_INFO("Done.");
 	fclose(trace_output);
@@ -1424,4 +1465,49 @@ void LoadOcsInitialMapping(NodeContainer &n)
                       << std::endl;
         }
     }
+}
+
+void StartOcsController(NodeContainer &n)
+{
+    if (!ocs_ctrl_enable) {
+        return;
+    }
+
+    NS_ASSERT_MSG(!ocs_node_ids.empty(), "OCS controller enabled but no OCS nodes exist");
+    NS_ASSERT_MSG(ocs_ctrl_interval_us > 0, "OCS_CTRL_INTERVAL_US must be positive");
+
+    std::vector<uint32_t> ocsIds;
+    for (std::set<uint32_t>::iterator it = ocs_node_ids.begin();
+         it != ocs_node_ids.end(); ++it) {
+        ocsIds.push_back(*it);
+    }
+
+    uint32_t firstOcsId = ocsIds[0];
+    NS_ASSERT_MSG(logicalPortToIf.find(firstOcsId) != logicalPortToIf.end(),
+                  "First OCS has no logical ports");
+
+    std::vector<uint32_t> logicalPorts;
+    for (std::map<uint32_t, uint32_t>::iterator it = logicalPortToIf[firstOcsId].begin();
+         it != logicalPortToIf[firstOcsId].end(); ++it) {
+        logicalPorts.push_back(it->first);
+    }
+
+    OcsPolicy* policy = 0;
+
+    if (ocs_ctrl_mode == "rr") {
+        policy = new RrOcsPolicy(ocsIds, logicalPorts);
+    } else {
+        NS_ASSERT_MSG(false, "Unsupported OCS_CTRL_MODE. Currently supported: rr");
+    }
+
+    g_ocs_controller = new OcsController(
+        n,
+        logicalPortToIf,
+        policy,
+        MicroSeconds(ocs_ctrl_interval_us),
+        MicroSeconds(ocs_reconfig_delay_us)
+    );
+
+    uint64_t startUs = ocs_ctrl_start_set ? ocs_ctrl_start_us : ocs_ctrl_interval_us;
+    g_ocs_controller->Start(MicroSeconds(startUs));
 }

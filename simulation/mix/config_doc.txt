@@ -14,6 +14,12 @@ OCS_MAP_FILE mix/04-ocs_map.txt {input file: static ocs port mapping}
 
 SIMULATOR_STOP_TIME 4.00 {simulation stop time}
 
+OCS_CTRL_ENABLE 1 {turn on ocs controller: 1: on 0: off}
+OCS_CTRL_MODE rr {ocs controller mode}
+OCS_CTRL_INTERVAL_US 100000 {ocs controller switch time interval(us)}
+OCS_RECONFIG_DELAY_US 10 {ocs controller switch delay(us)}
+OCS_CTRL_START_US 100000 {ocs controller start time(us)}
+
 CC_MODE 3 {Specifying different CC. 1: DCQCN, 3: HPCC, 7: TIMELY, 8: DCTCP, 10: HPCC-PINT}
 ALPHA_RESUME_INTERVAL 1 {for DCQCN: the interval of update alpha}
 RATE_DECREASE_INTERVAL 4 {for DCQCN: the interval of rate decrease}

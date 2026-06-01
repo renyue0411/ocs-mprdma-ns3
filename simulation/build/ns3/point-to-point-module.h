@@ -17,6 +17,7 @@
 #include "mp-rdma-queue-pair.h"
 #include "mp-switch-node.h"
 #include "myf-hello.h"
+#include "ocs-controller.h"
 #include "ocs-node.h"
 #include "pause-header.h"
 #include "pint.h"

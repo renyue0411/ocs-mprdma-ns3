@@ -3,6 +3,7 @@
 #include "ns3/log.h"
 #include "ns3/simulator.h"
 #include "ns3/uinteger.h"
+#include <iostream>
 
 namespace ns3 {
 
@@ -153,18 +154,39 @@ OcsNode::SwitchReceiveFromDevice(Ptr<NetDevice> device, Ptr<Packet> packet, Cust
         return true;
     }
 
-    Ptr<MpQbbNetDevice> outDev = DynamicCast<MpQbbNetDevice>(GetDevice(outPort));
-    if (outDev == 0) {
-        std::cout << "[OCS DROP BAD_DEV] t=" << Simulator::Now().GetTimeStep()
-                  << " node=" << GetId()
-                  << " outPort=" << outPort
-                  << std::endl;
-        return true;
+    if (ch.l3Prot == 0x11) {
+        // UDP data packet
+        m_dataPacketsByOutPort[outPort]++;
+        m_dataBytesByOutPort[outPort] += packet->GetSize();
+    }
+    else if (ch.l3Prot == 0xFC || ch.l3Prot == 0xFD) {
+        // ACK / NACK
+        m_ackPacketsByOutPort[outPort]++;
+        m_ackBytesByOutPort[outPort] += packet->GetSize();
     }
 
     uint32_t qIndex = GetQueueIndex(ch);
 
-    outDev->SwitchSend(qIndex, packet, ch);
+    // Shared OCS data plane:
+    // - standard RDMA uses QbbNetDevice
+    // - MP-RDMA uses MpQbbNetDevice
+    // Both device classes expose SwitchSend(qIndex, packet, ch).
+    Ptr<QbbNetDevice> rdmaOutDev = DynamicCast<QbbNetDevice>(GetDevice(outPort));
+    if (rdmaOutDev != 0) {
+        rdmaOutDev->SwitchSend(qIndex, packet, ch);
+        return true;
+    }
+
+    Ptr<MpQbbNetDevice> mpOutDev = DynamicCast<MpQbbNetDevice>(GetDevice(outPort));
+    if (mpOutDev != 0) {
+        mpOutDev->SwitchSend(qIndex, packet, ch);
+        return true;
+    }
+
+    std::cout << "[OCS DROP BAD_DEV] t=" << Simulator::Now().GetTimeStep()
+              << " node=" << GetId()
+              << " outPort=" << outPort
+              << std::endl;
     return true;
 }
 
@@ -173,6 +195,52 @@ OcsNode::SwitchNotifyDequeue(uint32_t ifIndex, uint32_t qIndex, Ptr<Packet> p)
 {
     // 第一版不做 OCS 内部 MMU / PFC / ECN 统计。
     // 后面如果要模拟 OCS 入口缓存或 ToR admission，可以在这里扩展。
+}
+
+void
+OcsNode::DumpStats() const
+{
+    for (std::map<uint32_t, uint64_t>::const_iterator it =
+             m_dataBytesByOutPort.begin();
+         it != m_dataBytesByOutPort.end();
+         ++it) {
+
+        uint32_t outPort = it->first;
+
+        std::map<uint32_t, uint64_t>::const_iterator pktIt =
+            m_dataPacketsByOutPort.find(outPort);
+
+        uint64_t packets =
+            pktIt == m_dataPacketsByOutPort.end() ? 0 : pktIt->second;
+
+        std::cout << "[OCS DATA STATS]"
+                  << " node=" << GetId()
+                  << " outPort=" << outPort
+                  << " packets=" << packets
+                  << " bytes=" << it->second
+                  << std::endl;
+    }
+
+    for (std::map<uint32_t, uint64_t>::const_iterator it =
+             m_ackBytesByOutPort.begin();
+         it != m_ackBytesByOutPort.end();
+         ++it) {
+
+        uint32_t outPort = it->first;
+
+        std::map<uint32_t, uint64_t>::const_iterator pktIt =
+            m_ackPacketsByOutPort.find(outPort);
+
+        uint64_t packets =
+            pktIt == m_ackPacketsByOutPort.end() ? 0 : pktIt->second;
+
+        std::cout << "[OCS ACK STATS]"
+                  << " node=" << GetId()
+                  << " outPort=" << outPort
+                  << " packets=" << packets
+                  << " bytes=" << it->second
+                  << std::endl;
+    }
 }
 
 } // namespace ns3
